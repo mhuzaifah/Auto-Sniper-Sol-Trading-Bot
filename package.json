@@ -1,7 +1,7 @@
 {
   "name": "auto-sniper-bot",
   "version": "1.0.0",
-  "main": "./dist/index.js",
+  "main": "index.js",
   "scripts": {
     "start": "npm run build && electron .",
     "build": "tsc",

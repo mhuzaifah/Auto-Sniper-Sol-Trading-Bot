@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="stylesheet" href="dashboardStyle.css">
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+        <title>Typescript Electron App</title>
+    </head>
+    <body>
+        <div class="outer-container">
+            <div class="container">
+                <div class="section" id="section1">
+                    <h2>Current Positions</h2>
+                    <div class="content">
+                        Coin Price: 
+                        <div class="sub-content">Marketcap: </div> <!-- Added this line -->
+                    </div>
+                </div>
+                <div class="section" id="section2">
+                    <h2>Chart</h2>
+                    <div class="content"></div>
+                </div>
+                <div class="section" id="section3">
+                    <h2>P&L</h2>
+                    <div class="content">
+                        Total SOL Gained/Lost: 
+                        <div class="sub-content">Total SOL in: </div> <!-- Added this line -->
+                    </div>
+                </div>
+                <div class="section" id="section4">
+                    <h2>Terminal</h2>
+                    <div class="terminal-output" id="terminal-output">hi</div>
+                </div>
+            </div>
+        </div>
+        <script src="../dist/renderer.js"></script>
+    </body>
+</html>
