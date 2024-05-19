@@ -1,0 +1,59 @@
+/* indexStyle.css - Updated for uniform font and color across the site */
+* {
+    margin: 0; /* Removes default margin */
+    padding: 0; /* Removes default padding */
+    box-sizing: border-box; /* Includes padding and border in element's dimensions */
+    color: #038901; /* Sets text color to bright green for all text */
+    font-family: 'VT323', monospace; /* Uniform font for the whole page */
+}
+
+html, body {
+    height: 100%; /* Ensures the body takes full viewport height */
+    display: flex;
+    flex-direction: column; /* Stacks content vertically */
+    justify-content: center; /* Centers content vertically */
+    align-items: center; /* Centers content horizontally */
+    background-color: #171717; /* Dark background */
+    background-image: url('https://example.com/crypto-pattern.png'); /* Placeholder URL for your background image */
+    background-size: cover; /* Ensures background covers the entire area */
+    background-repeat: no-repeat; /* No repetition of background */
+}
+
+h1 {
+    font-size: 3em; /* Increases font size */
+    margin-bottom: 30px; /* Reduced space below the header to bring elements closer */
+}
+
+#windowButton {
+    position: absolute; /* Absolute positioning relative to the nearest positioned ancestor */
+    bottom: 100px; /* Increased distance from the bottom to move buttons up */
+    width: 100%; /* Full width */
+    text-align: center; /* Centers the buttons */
+}
+
+button {
+    border: none;
+    background-color: #555555; 
+    padding: 10px 20px;
+    margin: 5px;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s; /* Adds transform to the transition */
+    border-radius: 10px; /* Rounds the corners of the buttons */
+}
+
+button:hover {
+    background-color: #4b4b4b; /* Darker shade for hover */
+    transform: translateY(-2px); /* Slight raise effect on hover */
+}
+
+@font-face {
+    font-family: "pdark";
+    src: url("Assets/pdark.ttf") format("truetype");
+}
+
+.vt323-regular {
+    font-family: "VT323", monospace;
+    font-weight: 400;
+    font-style: normal;
+  }
