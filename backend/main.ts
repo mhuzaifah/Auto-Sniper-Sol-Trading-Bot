@@ -1,6 +1,6 @@
 import { Connection, Logs, PublicKey } from "@solana/web3.js";
 import { RPC_URL, TOKEN_TO_SNIPE, WS_URL } from "./config";
-import { LiquidityPoolKeysV4, MAINNET_PROGRAM_ID, Token } from "@raydium-io/raydium-sdk";
+import { Liquidity, LiquidityPoolKeysV4, MAINNET_PROGRAM_ID, Percent, TOKEN_PROGRAM_ID, Token, TokenAmount } from "@raydium-io/raydium-sdk";
 import { getPoolKeys } from "./poolKeys";
 import { snipe } from "./snipe";
 import { MintLayout } from "@solana/spl-token";
@@ -10,7 +10,6 @@ import { Metaplex } from "@metaplex-foundation/js";
 export const connection = new Connection(RPC_URL, { wsEndpoint: WS_URL, commitment: "confirmed" });
 const seenTx: string[] = [];
 
-let working = false;
 
 listener();
 
@@ -27,32 +26,24 @@ function listener(): void {
                 return;
             }
 
-            if (working) {
-                return;
-            }
-            working = true;
-
             console.log("Pool initialization detected. Fetching pool keys...");
             const poolKeys = await getPoolKeys(txLogs.signature);
             if (!poolKeys) {
-                working = false;
                 return;
             }
 
             const baseSol = poolKeys.baseMint.equals(Token.WSOL.mint);
 
             if (!checkToken(poolKeys, baseSol)) {
-                console.log("Pool does not match our criteria. Skipping...");
-                working = false;
+                console.log(`Pool does not match our criteria. Skipping...`);
                 return;
             }
 
-            await snipe(poolKeys, baseSol);
-            working = false;
+            console.log(`Attempting to snipe. Token contract address: ${baseSol ? poolKeys.quoteMint.toBase58() : poolKeys.baseMint.toBase58()}`);
 
+            await snipe(poolKeys, baseSol);
         } catch (error) {
-            console.error(error);
-            working = false;
+            console.error(`Encountered error: ${error}`);
         }
     });
 }
@@ -167,4 +158,32 @@ async function checkToken(poolKeys: LiquidityPoolKeysV4, baseSol: boolean) {
         }
         return (baseSol && !quoteSol) || (quoteSol && !baseSol);
     }
+}
+
+async function trackPrice(poolKeys: LiquidityPoolKeysV4, baseSol: boolean) {
+    const token = new Token(TOKEN_PROGRAM_ID, baseSol ? poolKeys.quoteMint : poolKeys.baseMint, baseSol ? poolKeys.quoteDecimals : poolKeys.baseDecimals);
+    while (true) {
+        const poolInfo = await Liquidity.fetchInfo({ connection, poolKeys });
+
+        const computedAmountOut = Liquidity.computeAmountOut({
+            poolKeys,
+            poolInfo,
+            amountIn: new TokenAmount(Token.WSOL, 1, false),
+            currencyOut: token,
+            slippage: new Percent(0, 100),
+        });
+        const price = 1 / Number(computedAmountOut.amountOut.toExact());
+        console.log(price);
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+}
+
+async function getTokenSupply(mint: PublicKey): Promise<bigint | null> {
+    const accountInfo = await connection.getAccountInfo(mint)
+    if (!accountInfo?.data) {
+        return null;
+    }
+    const deserialize = MintLayout.decode(accountInfo.data);
+    return deserialize.supply
 }
