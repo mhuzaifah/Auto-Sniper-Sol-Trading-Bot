@@ -10,6 +10,7 @@ import { Metaplex } from "@metaplex-foundation/js";
 export const connection = new Connection(RPC_URL, { wsEndpoint: WS_URL, commitment: "confirmed" });
 const seenTx: string[] = [];
 
+let working = false;
 
 listener();
 
@@ -26,24 +27,32 @@ function listener(): void {
                 return;
             }
 
+            if (working) {
+                return;
+            }
+            working = true;
+
             console.log("Pool initialization detected. Fetching pool keys...");
             const poolKeys = await getPoolKeys(txLogs.signature);
             if (!poolKeys) {
+                working = false;
                 return;
             }
 
             const baseSol = poolKeys.baseMint.equals(Token.WSOL.mint);
 
             if (!checkToken(poolKeys, baseSol)) {
-                console.log(`Pool does not match our criteria. Skipping...`);
+                console.log("Pool does not match our criteria. Skipping...");
+                working = false;
                 return;
             }
 
-            console.log(`Attempting to snipe. Token contract address: ${baseSol ? poolKeys.quoteMint.toBase58() : poolKeys.baseMint.toBase58()}`);
-
             await snipe(poolKeys, baseSol);
+            working = false;
+
         } catch (error) {
-            console.error(`Encountered error: ${error}`);
+            console.error(error);
+            working = false;
         }
     });
 }

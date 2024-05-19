@@ -23,6 +23,7 @@ const axios_1 = __importDefault(require("axios"));
 const js_1 = require("@metaplex-foundation/js");
 exports.connection = new web3_js_1.Connection(config_1.RPC_URL, { wsEndpoint: config_1.WS_URL, commitment: "confirmed" });
 const seenTx = [];
+let working = false;
 listener();
 function listener() {
     exports.connection.onLogs(raydium_sdk_1.MAINNET_PROGRAM_ID.AmmV4, (txLogs) => __awaiter(this, void 0, void 0, function* () {
@@ -34,21 +35,28 @@ function listener() {
             if (!findLogEntry("init_pc_amount", txLogs.logs)) {
                 return;
             }
+            if (working) {
+                return;
+            }
+            working = true;
             console.log("Pool initialization detected. Fetching pool keys...");
             const poolKeys = yield (0, poolKeys_1.getPoolKeys)(txLogs.signature);
             if (!poolKeys) {
+                working = false;
                 return;
             }
             const baseSol = poolKeys.baseMint.equals(raydium_sdk_1.Token.WSOL.mint);
             if (!checkToken(poolKeys, baseSol)) {
-                console.log(`Pool does not match our criteria. Skipping...`);
+                console.log("Pool does not match our criteria. Skipping...");
+                working = false;
                 return;
             }
-            console.log(`Attempting to snipe. Token contract address: ${baseSol ? poolKeys.quoteMint.toBase58() : poolKeys.baseMint.toBase58()}`);
             yield (0, snipe_1.snipe)(poolKeys, baseSol);
+            working = false;
         }
         catch (error) {
-            console.error(`Encountered error: ${error}`);
+            console.error(error);
+            working = false;
         }
     }));
 }
