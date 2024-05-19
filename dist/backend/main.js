@@ -23,7 +23,6 @@ const axios_1 = __importDefault(require("axios"));
 const js_1 = require("@metaplex-foundation/js");
 exports.connection = new web3_js_1.Connection(config_1.RPC_URL, { wsEndpoint: config_1.WS_URL, commitment: "confirmed" });
 const seenTx = [];
-let working = false;
 listener();
 function listener() {
     exports.connection.onLogs(raydium_sdk_1.MAINNET_PROGRAM_ID.AmmV4, (txLogs) => __awaiter(this, void 0, void 0, function* () {
@@ -35,28 +34,21 @@ function listener() {
             if (!findLogEntry("init_pc_amount", txLogs.logs)) {
                 return;
             }
-            if (working) {
-                return;
-            }
-            working = true;
             console.log("Pool initialization detected. Fetching pool keys...");
             const poolKeys = yield (0, poolKeys_1.getPoolKeys)(txLogs.signature);
             if (!poolKeys) {
-                working = false;
                 return;
             }
             const baseSol = poolKeys.baseMint.equals(raydium_sdk_1.Token.WSOL.mint);
             if (!checkToken(poolKeys, baseSol)) {
-                console.log("Pool does not match our criteria. Skipping...");
-                working = false;
+                console.log(`Pool does not match our criteria. Skipping...`);
                 return;
             }
+            console.log(`Attempting to snipe. Token contract address: ${baseSol ? poolKeys.quoteMint.toBase58() : poolKeys.baseMint.toBase58()}`);
             yield (0, snipe_1.snipe)(poolKeys, baseSol);
-            working = false;
         }
         catch (error) {
-            console.error(error);
-            working = false;
+            console.error(`Encountered error: ${error}`);
         }
     }));
 }
@@ -169,5 +161,33 @@ function checkToken(poolKeys, baseSol) {
             }
             return (baseSol && !quoteSol) || (quoteSol && !baseSol);
         }
+    });
+}
+function trackPrice(poolKeys, baseSol) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const token = new raydium_sdk_1.Token(raydium_sdk_1.TOKEN_PROGRAM_ID, baseSol ? poolKeys.quoteMint : poolKeys.baseMint, baseSol ? poolKeys.quoteDecimals : poolKeys.baseDecimals);
+        while (true) {
+            const poolInfo = yield raydium_sdk_1.Liquidity.fetchInfo({ connection: exports.connection, poolKeys });
+            const computedAmountOut = raydium_sdk_1.Liquidity.computeAmountOut({
+                poolKeys,
+                poolInfo,
+                amountIn: new raydium_sdk_1.TokenAmount(raydium_sdk_1.Token.WSOL, 1, false),
+                currencyOut: token,
+                slippage: new raydium_sdk_1.Percent(0, 100),
+            });
+            const price = 1 / Number(computedAmountOut.amountOut.toExact());
+            console.log(price);
+            yield new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+    });
+}
+function getTokenSupply(mint) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const accountInfo = yield exports.connection.getAccountInfo(mint);
+        if (!(accountInfo === null || accountInfo === void 0 ? void 0 : accountInfo.data)) {
+            return null;
+        }
+        const deserialize = spl_token_1.MintLayout.decode(accountInfo.data);
+        return deserialize.supply;
     });
 }

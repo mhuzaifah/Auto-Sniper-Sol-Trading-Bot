@@ -15,3 +15,4 @@ export const TOKEN_TO_SNIPE = process.env["TOKEN_TO_SNIPE"] as string;
 export const SNIPE_AMOUNT = Number(process.env["SNIPE_AMOUNT"]);
 export const SLIPPAGE = Number(process.env["SLIPPAGE"]);
 export const JITO_FEE = Number(process.env["JITO_FEE"]);
+export const SELL_AMOUNT = Number(process.env["SELL_AMOUNT"]);
