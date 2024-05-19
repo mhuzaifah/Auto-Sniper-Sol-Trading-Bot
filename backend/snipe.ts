@@ -1,10 +1,10 @@
 import { Liquidity, LiquidityPoolKeysV4, Percent, TOKEN_PROGRAM_ID, Token, TokenAmount } from "@raydium-io/raydium-sdk";
-import { Commitment, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync, getAssociatedTokenAddress, createAssociatedTokenAccountIdempotentInstruction, getOrCreateAssociatedTokenAccount, createSyncNativeInstruction, createCloseAccountInstruction } from "@solana/spl-token";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync, getAssociatedTokenAddress, createAssociatedTokenAccountIdempotentInstruction, getOrCreateAssociatedTokenAccount, createSyncNativeInstruction } from "@solana/spl-token";
 import { Bundle } from "jito-ts/dist/sdk/block-engine/types.js";
 import { searcherClient } from "jito-ts/dist/sdk/block-engine/searcher.js";
 import bs58 from "bs58";
-import { JITO_KEY, PRIV_KEY, SLIPPAGE, SNIPE_AMOUNT, JITO_BLOCK_URL, JITO_FEE } from "./config";
+import { JITO_KEY, PRIV_KEY, SLIPPAGE, SNIPE_AMOUNT, JITO_BLOCK_URL, JITO_FEE, SELL_AMOUNT } from "./config";
 import { connection } from "./main";
 
 const jitoTipAccounts = [
@@ -18,8 +18,6 @@ const jitoTipAccounts = [
     "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
 ];
 
-let latestBlockhash: Readonly<{ blockhash: string; lastValidBlockHeight: number }>;
-
 export async function snipe(poolKeys: LiquidityPoolKeysV4, baseSol: boolean) {
     const wallet = Keypair.fromSecretKey(bs58.decode(PRIV_KEY));
     const ataIn = (await getOrCreateAssociatedTokenAccount(connection, wallet, Token.WSOL.mint, wallet.publicKey)).address;
@@ -28,32 +26,17 @@ export async function snipe(poolKeys: LiquidityPoolKeysV4, baseSol: boolean) {
     const tokenOut = new Token(TOKEN_PROGRAM_ID, baseSol ? poolKeys.quoteMint : poolKeys.baseMint, baseSol ? poolKeys.quoteDecimals : poolKeys.baseDecimals);
     const quoteAmount = new TokenAmount(tokenIn, SNIPE_AMOUNT, false);
 
-    // Execute the buy transaction
-    const buyTx = await buildSwapTransaction(poolKeys, quoteAmount, ataIn, ataOut, wallet, tokenOut, tokenIn, "buy");
-    console.log("Buy transaction built successfully. Creating Jito bundle...");
-    const jitoBuyTx = await createJitoBundle(wallet);
-    const buyConfirmation = await sendAndConfirmBundle(buyTx, jitoBuyTx);
-    console.log("Buy confirmed. Proceeding to sell...");
+    const swapTx = await buildSwapTransaction(poolKeys, quoteAmount, ataIn, ataOut, wallet, tokenOut);
+    console.log("Swap transaction built successfully. Creating Jito bundle...");
 
-    // Execute the sell transaction
-    const sellTx = await buildSwapTransaction(poolKeys, quoteAmount, ataOut, ataIn, wallet, tokenIn, tokenOut, "sell");
-    console.log("Sell transaction built successfully. Creating Jito bundle...");
-    const jitoSellTx = await createJitoBundle(wallet);
-    const sellConfirmation = await sendAndConfirmBundle(sellTx, jitoSellTx);
-    console.log("Sell confirmed.");
+    const jitoTx = await createJitoBundle(wallet);
+    const confirmation = await sendAndConfirmBundle(swapTx, jitoTx);
 
-    return { buyConfirmation, sellConfirmation };
+    return confirmation;
 }
 
-async function buildSwapTransaction(poolKeys: LiquidityPoolKeysV4, buyQuoteAmount: TokenAmount, ataIn: PublicKey, ataOut: PublicKey, wallet: Keypair, tokenOut: Token, tokenIn: Token, direction: "buy" | "sell") {
+async function buildSwapTransaction(poolKeys: LiquidityPoolKeysV4, quoteAmount: TokenAmount, ataIn: PublicKey, ataOut: PublicKey, wallet: Keypair, tokenOut: Token) {
     const poolInfo = await Liquidity.fetchInfo({ connection, poolKeys });
-    let quoteAmount;
-
-    if (direction === "buy") {
-        quoteAmount = buyQuoteAmount;
-    } else {
-        quoteAmount = new TokenAmount(tokenIn, Number((await connection.getTokenAccountBalance(ataIn)).value.uiAmountString), false);
-    }
 
     const computedAmountOut = Liquidity.computeAmountOut({
         poolKeys,
@@ -77,33 +60,94 @@ async function buildSwapTransaction(poolKeys: LiquidityPoolKeysV4, buyQuoteAmoun
         poolKeys.version
     );
 
-    latestBlockhash = await connection.getLatestBlockhash();
+    const latestBlockhash = await connection.getLatestBlockhash();
 
-    let instructions: TransactionInstruction[] = [];
+    let wsolBalance =  await connection.getTokenAccountBalance(ataIn);
+    let availableWsol = Number(wsolBalance.value.uiAmountString as string) * wsolBalance.value.decimals;
 
-    if (direction === "buy") {
-        instructions.push(
-            SystemProgram.transfer({
-                fromPubkey: wallet.publicKey,
-                toPubkey: ataIn,
-                lamports: quoteAmount.raw,
-            })
-        );
-        instructions.push(createSyncNativeInstruction(ataIn, TOKEN_PROGRAM_ID));
-        instructions.push(createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, ataOut, wallet.publicKey, tokenOut.mint));
-    }
-
-    instructions.push(...innerTransaction.instructions);
-
-    if (direction === "sell") {
-        instructions.push(createCloseAccountInstruction(ataIn, wallet.publicKey, wallet.publicKey));
-    }
+    console.log(quoteAmount.raw + availableWsol);
 
     const versionedTx = new VersionedTransaction(
         new TransactionMessage({
             payerKey: wallet.publicKey,
             recentBlockhash: latestBlockhash.blockhash,
-            instructions: instructions,
+            instructions: [
+                SystemProgram.transfer({
+                    fromPubkey: wallet.publicKey,
+                    toPubkey: ataIn,
+                    lamports: quoteAmount.raw,
+                }),
+                createSyncNativeInstruction(ataIn, TOKEN_PROGRAM_ID),
+                createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, ataOut, wallet.publicKey, tokenOut.mint),
+                ...innerTransaction.instructions,
+            ],
+        }).compileToV0Message()
+    );
+
+    versionedTx.sign([wallet]);
+
+    return versionedTx;
+}
+
+export async function sell(poolKeys: LiquidityPoolKeysV4, baseSol: boolean) {
+    const wallet = Keypair.fromSecretKey(bs58.decode(PRIV_KEY));
+    const ataOut = (await getOrCreateAssociatedTokenAccount(connection, wallet, Token.WSOL.mint, wallet.publicKey)).address;
+    const ataIn = await getAssociatedTokenAddress(baseSol ? poolKeys.quoteMint : poolKeys.baseMint, wallet.publicKey);
+    const tokenOut = Token.WSOL;
+    const tokenIn = new Token(TOKEN_PROGRAM_ID, baseSol ? poolKeys.quoteMint : poolKeys.baseMint, baseSol ? poolKeys.quoteDecimals : poolKeys.baseDecimals);
+
+    // Get token balance
+    const tokenBalanceInfo = await connection.getTokenAccountBalance(ataIn);
+    const tokenBalance = Number(tokenBalanceInfo.value.amount);
+
+    // Calculate sell amount based on the percentage
+    const sellAmountInSmallestUnit = tokenBalance * SELL_AMOUNT;
+    const sellAmount = new TokenAmount(tokenIn, sellAmountInSmallestUnit, false);
+
+    const swapTx = await buildSellTransaction(poolKeys, sellAmount, ataIn, ataOut, wallet, tokenOut);
+    console.log("Sell transaction built successfully. Creating Jito bundle...");
+
+    const jitoTx = await createJitoBundle(wallet);
+    const confirmation = await sendAndConfirmBundle(swapTx, jitoTx);
+
+    return confirmation;
+}
+
+async function buildSellTransaction(poolKeys: LiquidityPoolKeysV4, sellAmount: TokenAmount, ataIn: PublicKey, ataOut: PublicKey, wallet: Keypair, tokenOut: Token) {
+    const poolInfo = await Liquidity.fetchInfo({ connection, poolKeys });
+
+    const computedAmountOut = Liquidity.computeAmountOut({
+        poolKeys,
+        poolInfo,
+        amountIn: sellAmount,
+        currencyOut: tokenOut,
+        slippage: new Percent(SLIPPAGE, 100),
+    });
+
+    const { innerTransaction } = Liquidity.makeSwapFixedInInstruction(
+        {
+            poolKeys,
+            userKeys: {
+                tokenAccountIn: ataIn,
+                tokenAccountOut: ataOut,
+                owner: wallet.publicKey,
+            },
+            amountIn: sellAmount.raw,
+            minAmountOut: computedAmountOut.minAmountOut.raw,
+        },
+        poolKeys.version
+    );
+
+    const latestBlockhash = await connection.getLatestBlockhash();
+
+    const versionedTx = new VersionedTransaction(
+        new TransactionMessage({
+            payerKey: wallet.publicKey,
+            recentBlockhash: latestBlockhash.blockhash,
+            instructions: [
+                createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, ataOut, wallet.publicKey, tokenOut.mint),
+                ...innerTransaction.instructions,
+            ],
         }).compileToV0Message()
     );
 
@@ -113,6 +157,7 @@ async function buildSwapTransaction(poolKeys: LiquidityPoolKeysV4, buyQuoteAmoun
 }
 
 async function createJitoBundle(wallet: Keypair) {
+    const latestBlockhash = await connection.getLatestBlockhash();
     let i = Math.floor(Math.random() * jitoTipAccounts.length);
     const tipAccount = new PublicKey(jitoTipAccounts[i]);
 
@@ -144,6 +189,7 @@ async function sendAndConfirmBundle(versionedTx: VersionedTransaction, jitoTx: V
     const bundleId = await searcher.sendBundle(new Bundle(txSigned, txSigned.length));
 
     const signature = bs58.encode(versionedTx.signatures[0]);
+    const latestBlockhash = await connection.getLatestBlockhash();
     let confirmation;
 
     confirmation = await connection.confirmTransaction({
