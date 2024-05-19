@@ -78,7 +78,6 @@ async function buildSwapTransaction(poolKeys: LiquidityPoolKeysV4, buyQuoteAmoun
     );
 
     latestBlockhash = await connection.getLatestBlockhash();
-
     let instructions: TransactionInstruction[] = [];
 
     if (direction === "buy") {
