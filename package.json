@@ -20,7 +20,7 @@
     "bs58": "^5.0.0",
     "chart.js": "^4.4.3",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.21.1",
     "jito-ts": "^3.0.1",
     "typecript": "^0.0.1-security"
   },
