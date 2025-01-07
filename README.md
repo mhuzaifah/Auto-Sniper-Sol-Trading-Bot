@@ -20,14 +20,6 @@ Price Tracking and Analysis:
 
 It tracks token prices in real time, analyzing market data to identify profitable trading opportunities. This includes monitoring price fluctuations, trading volumes, and other relevant market indicators.
 
-Automated Buying:
-
-Upon identifying a profitable opportunity, the bot executes buy orders automatically. It can place orders with optimal timing to buy tokens at the lowest possible price, aiming to take advantage of early market movements, especially during new token launches.
-
-Automated Selling:
-
-Similarly, the bot is programmed to sell tokens when certain profit conditions are met. This ensures that the bot can capitalize on price increases, selling tokens at a higher price to achieve a profit margin.
-
 High-Frequency Trading:
 
 The bot is capable of executing trades at high speed, often sending multiple transactions per second. This high-frequency trading capability is essential for staying ahead in the competitive and fast-moving crypto market.
@@ -35,10 +27,6 @@ The bot is capable of executing trades at high speed, often sending multiple tra
 Integration with Solana Network:
 
 Leveraging Solana's high throughput and low transaction costs, the bot can perform numerous trades efficiently without incurring significant fees.
-
-Real-Time Notifications:
-
-The bot can be configured to send real-time notifications about its trading activities, performance metrics, and any significant market changes. This ensures that the user is always informed about the bot’s operations and market conditions.
 
 User Dashboard:
 
